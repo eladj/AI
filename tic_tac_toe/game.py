@@ -2,8 +2,6 @@ from copy import deepcopy
 from enum import Enum
 import numpy as np
 
-BOARD_SIZE = 3
-
 
 class Piece(Enum):
     X = 0
@@ -30,12 +28,10 @@ class GameState(Enum):
 class Player:
     ID = 0
 
-    def __init__(self, piece: Piece, name=None):
+    def __init__(self, piece: Piece, name=None, is_ai=False):
         self._name = name
         self._piece = piece
-        self.num_wins = 0
-        self.num_loses = 0
-        self.num_draws = 0
+        self._is_ai = is_ai
         self._id = deepcopy(Player.ID)
         if name is None:
             self._name = "P{}".format(self._id)
@@ -44,6 +40,10 @@ class Player:
     @property
     def name(self):
         return self._name
+
+    @property
+    def is_ai(self):
+        return self._is_ai
 
     @property
     def piece(self):
@@ -170,6 +170,22 @@ class Game:
         y, x = np.nonzero(b)
         return x, y
 
+    def find_best_move(self, game_obj=None, node=None):
+        # TODO
+        if game_obj is None:
+            game_obj = self
+        if node is None:
+            node = Node(value=0)
+
+        game_copy = deepcopy(game_obj)
+        valid_moves_x, valid_moves_y = game_copy.get_valid_moves()
+        for move_ind in range(len(valid_moves_x)):
+            game_copy.make_move(valid_moves_x[move_ind], valid_moves_y[move_ind])
+            child = node.add_child(Node(value=game_copy.score))
+            if game_copy._game_state == GameState.Playing:
+                self.find_best_move(game_obj=game_copy, node=child)
+        return node
+
     @property
     def player_to_move(self):
         return self.players[self.player_ind_to_move]
@@ -179,14 +195,16 @@ class Game:
         return self._score
 
 
-if __name__ == "__main__":
-    g = Game()
-    g.make_move(1, 1)
-    g.make_move(0, 0)
-    g.get_valid_moves()
-    g.make_move(1, 0)
-    g.make_move(0, 1)
-    g.make_move(2, 2)
-    g.make_move(0, 2)
-    g._board.print()
+class Node:
+    def __init__(self, value=0):
+        self.value = value
+        self.parent = None
+        self.children = []
 
+    def add_child(self, node):
+        node.parent = self
+        self.children.append(node)
+        return node
+
+    def is_terminal(self):
+        return len(self.children) == 0
