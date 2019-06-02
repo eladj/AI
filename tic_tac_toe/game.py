@@ -52,9 +52,7 @@ class Player:
 
 class Board:
     def __init__(self, rows=3, cols=3):
-        self._rows = rows
-        self._cols = cols
-        self._board = np.ones((self.rows, self.cols), dtype=np.uint8)
+        self._board = np.ones((rows, cols), dtype=np.uint8)
         self.reset()
 
     def reset(self):
@@ -88,11 +86,11 @@ class Board:
 
     @property
     def rows(self):
-        return self._rows
+        return self._board.shape[0]
 
     @property
     def cols(self):
-        return self._cols
+        return self._board.shape[1]
 
     @property
     def board(self):
@@ -175,16 +173,28 @@ class Game:
         if game_obj is None:
             game_obj = self
         if node is None:
-            node = Node(value=0)
+            root = Node(value=0)
 
-        game_copy = deepcopy(game_obj)
-        valid_moves_x, valid_moves_y = game_copy.get_valid_moves()
+        # Recursively expand the game tree
+        valid_moves_x, valid_moves_y = game_obj.get_valid_moves()
         for move_ind in range(len(valid_moves_x)):
+            # Create a separate version of the game
+            game_copy = deepcopy(game_obj)
+            # Make the move
             game_copy.make_move(valid_moves_x[move_ind], valid_moves_y[move_ind])
-            child = node.add_child(Node(value=game_copy.score))
+            if node is None:
+                # Add a node to the tree with this move ans score
+                child = root.add_child(Node(value=game_copy.score.value, state=game_copy._board))
+            else:
+                child = node.add_child(Node(value=game_copy.score.value, state=game_copy._board))
+            # If the game is still on-going, continue with this branch
             if game_copy._game_state == GameState.Playing:
                 self.find_best_move(game_obj=game_copy, node=child)
-        return node
+        if node is None:
+            # It's the initial call to the function
+            # TODO - Solve bug
+            best_move = minimax(node=root, depth=9)
+            return best_move
 
     @property
     def player_to_move(self):
@@ -196,8 +206,9 @@ class Game:
 
 
 class Node:
-    def __init__(self, value=0):
+    def __init__(self, value=0, state=None):
         self.value = value
+        self.state = state
         self.parent = None
         self.children = []
 
@@ -208,3 +219,28 @@ class Node:
 
     def is_terminal(self):
         return len(self.children) == 0
+
+
+def minimax(node: Node, depth: int, maximizing_player: bool = True):
+    if depth == 0 or node.is_terminal():
+        return node  # the heuristic value of node
+    best_move = None
+    if maximizing_player:
+        value = -float('inf')
+        for child in node.children:
+            next_node = minimax(child, depth=depth-1, maximizing_player=False)
+            if next_node.value > value:
+                value = next_node.value
+                best_move = child
+            # value = max(value, next_node.value)
+        return node
+    else:  # minimizing player
+        value = float('inf')
+        for child in node.children:
+            next_node = minimax(child, depth=depth - 1, maximizing_player=True)
+            value = min(value, next_node.value)
+            if next_node.value < value:
+                value = next_node.value
+                best_move = child
+        return node
+    return best_move
