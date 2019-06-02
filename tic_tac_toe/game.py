@@ -192,7 +192,6 @@ class Game:
                 self.find_best_move(game_obj=game_copy, node=child)
         if node is None:
             # It's the initial call to the function
-            # TODO - Solve bug
             best_move = minimax(node=root, depth=9)
             return best_move
 
@@ -232,15 +231,11 @@ def minimax(node: Node, depth: int, maximizing_player: bool = True):
             if next_node.value > value:
                 value = next_node.value
                 best_move = child
-            # value = max(value, next_node.value)
-        return node
     else:  # minimizing player
         value = float('inf')
         for child in node.children:
             next_node = minimax(child, depth=depth - 1, maximizing_player=True)
-            value = min(value, next_node.value)
             if next_node.value < value:
                 value = next_node.value
                 best_move = child
-        return node
     return best_move
