@@ -68,7 +68,7 @@ class Board:
             raise RuntimeError("Tile out of bounds")
         self._board[y, x] = piece.value
 
-    def print(self, with_grid=True):
+    def print(self, with_grid=False):
         s = ""
         if with_grid:
             s += " " + "".join([str(x) for x in range(self.cols)]) + "\n"
@@ -112,7 +112,7 @@ class Game:
         self.player_ind_to_move = 0
         print("Player {} turn".format(self.player_to_move.piece.name))
 
-    def make_move(self, x, y):
+    def make_move(self, x, y, verbose=False):
         # Check that we are playing
         if self._game_state != GameState.Playing:
             raise RuntimeError("GameState is not GameState.Playing")
@@ -126,24 +126,27 @@ class Game:
 
         # Check if current player won
         if self.is_win(self.player_to_move.piece):
-            if self.player_to_move.piece.X:
+            if self.player_to_move.piece == Piece.X:
                 self._score = Score.Win
             else:
                 self._score = Score.Lose
-            print("Player {} won!".format(self.player_to_move.piece.name))
+            if verbose:
+                print("Player {} won!".format(self.player_to_move.piece.name))
             self._game_state = GameState.Finished
             return
 
         # Check if draw
         if self.is_draw():
             self._score = Score.Draw
-            print("Draw")
+            if verbose:
+                print("Draw")
             self._game_state = GameState.Finished
             return
 
         # Change the next player to move
         self.player_ind_to_move = (self.player_ind_to_move + 1) % 2
-        print("Player {} turn".format(self.player_to_move.piece.name))
+        if verbose:
+            print("Player {} turn".format(self.player_to_move.piece.name))
 
     def is_win(self, piece: Piece) -> bool:
         b = self._board.board == piece.value  # True in each tile of the given piece
@@ -168,12 +171,12 @@ class Game:
         y, x = np.nonzero(b)
         return x, y
 
-    def find_best_move(self, game_obj=None, node=None):
-        # TODO
+    def find_best_move(self, game_obj=None, node=None, depth=9):
         if game_obj is None:
             game_obj = self
         if node is None:
             root = Node(value=0)
+            root.state = deepcopy(self._board)
 
         # Recursively expand the game tree
         valid_moves_x, valid_moves_y = game_obj.get_valid_moves()
@@ -188,12 +191,15 @@ class Game:
             else:
                 child = node.add_child(Node(value=game_copy.score.value, state=game_copy._board))
             # If the game is still on-going, continue with this branch
-            if game_copy._game_state == GameState.Playing:
-                self.find_best_move(game_obj=game_copy, node=child)
+            if game_copy._game_state == GameState.Playing and depth > 0:
+                self.find_best_move(game_obj=game_copy, node=child, depth=depth-1)
         if node is None:
-            # It's the initial call to the function
-            best_move = minimax(node=root, depth=9)
-            return best_move
+            # We came back to the initial call to the function and we populate the values
+            # of each node using minimax algorithm
+            minimax(node=root, depth=depth)
+            # We select the child with the best score
+            best_move_ind = np.argmax([x.value for x in root.children])
+            return valid_moves_x[best_move_ind], valid_moves_y[best_move_ind]
 
     @property
     def player_to_move(self):
@@ -223,19 +229,16 @@ class Node:
 def minimax(node: Node, depth: int, maximizing_player: bool = True):
     if depth == 0 or node.is_terminal():
         return node  # the heuristic value of node
-    best_move = None
     if maximizing_player:
-        value = -float('inf')
+        node.value = -float('inf')
         for child in node.children:
             next_node = minimax(child, depth=depth-1, maximizing_player=False)
-            if next_node.value > value:
-                value = next_node.value
-                best_move = child
+            if next_node.value > node.value:
+                node.value = next_node.value
     else:  # minimizing player
-        value = float('inf')
+        node.value = float('inf')
         for child in node.children:
             next_node = minimax(child, depth=depth - 1, maximizing_player=True)
-            if next_node.value < value:
-                value = next_node.value
-                best_move = child
-    return best_move
+            if next_node.value < node.value:
+                node.value = next_node.value
+    return node
