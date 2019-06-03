@@ -50,6 +50,13 @@ class Player:
         return self._piece
 
 
+class Move:
+    def __init__(self, x: int, y: int, piece: Piece):
+        self.x = x
+        self.y = y
+        self.piece = piece
+
+
 class Board:
     def __init__(self, rows=3, cols=3):
         self._board = np.ones((rows, cols), dtype=np.uint8)
@@ -63,10 +70,10 @@ class Board:
             raise RuntimeError("Tile out of bounds")
         return Tile(self.board[y, x])
 
-    def set_tile(self, x, y, piece: Piece):
-        if x > self.cols or y > self.rows or x < 0 or y < 0:
+    def set_tile(self, move: Move):
+        if move.x > self.cols or move.y > self.rows or move.x < 0 or move.y < 0:
             raise RuntimeError("Tile out of bounds")
-        self._board[y, x] = piece.value
+        self._board[move.y, move.x] = move.piece.value
 
     def print(self, with_grid=False):
         s = ""
@@ -104,6 +111,7 @@ class Game:
         self.players = [Player(piece=Piece.X), Player(piece=Piece.O)]
         self.player_ind_to_move = 0
         self._score = Score.Draw
+        self._move_list = []
         self.reset()
 
     def reset(self):
@@ -112,17 +120,20 @@ class Game:
         self.player_ind_to_move = 0
         print("Player {} turn".format(self.player_to_move.piece.name))
 
-    def make_move(self, x, y, verbose=False):
+    def make_move(self, move: Move, verbose=False):
         # Check that we are playing
         if self._game_state != GameState.Playing:
             raise RuntimeError("GameState is not GameState.Playing")
 
         # Check if move is valid
-        if self._board.get_tile(x, y) != Tile.Empty:
+        if self._board.get_tile(move.x, move.y) != Tile.Empty:
             raise RuntimeError("Tile Not Empty")
+        if move.piece != self.player_to_move.piece:
+            raise RuntimeError("It's not {} turn".format(move.piece.name))
 
         # Put new marker
-        self._board.set_tile(x, y, self.player_to_move.piece)
+        self._board.set_tile(move)
+        self._move_list.append(move)
 
         # Check if current player won
         if self.is_win(self.player_to_move.piece):
@@ -171,6 +182,12 @@ class Game:
         y, x = np.nonzero(b)
         return x, y
 
+    @staticmethod
+    def get_valid_moves_s(board: Board) -> Move:
+        b = board == Tile.Empty.value  # True in each empty tile
+        y, x = np.nonzero(b)
+        return x, y
+
     def find_best_move(self, game_obj=None, node=None, depth=9):
         if game_obj is None:
             game_obj = self
@@ -184,7 +201,7 @@ class Game:
             # Create a separate version of the game
             game_copy = deepcopy(game_obj)
             # Make the move
-            game_copy.make_move(valid_moves_x[move_ind], valid_moves_y[move_ind])
+            game_copy.make_move(Move(x=valid_moves_x[move_ind], y=valid_moves_y[move_ind], piece=game_copy.player_to_move.piece))
             if node is None:
                 # Add a node to the tree with this move ans score
                 child = root.add_child(Node(value=game_copy.score.value, state=game_copy._board))
@@ -199,7 +216,8 @@ class Game:
             minimax(node=root, depth=depth)
             # We select the child with the best score
             best_move_ind = np.argmax([x.value for x in root.children])
-            return valid_moves_x[best_move_ind], valid_moves_y[best_move_ind]
+            move = Move(x=valid_moves_x[best_move_ind], y=valid_moves_y[best_move_ind], piece=self.player_to_move.piece)
+            return move
 
     @property
     def player_to_move(self):
